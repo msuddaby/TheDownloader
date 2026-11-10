@@ -87,6 +87,14 @@ button:disabled { opacity: .55; cursor: default; }
 .ghost { background: transparent; color: var(--accent); border-color: var(--border); }
 .wide { width: 100%; margin-top: 14px; }
 
+.byline { margin: 4px 0 0; font-size: .9rem; }
+.item { margin-top: 16px; }
+.item + .item { border-top: 1px solid var(--border); padding-top: 16px; }
+.item-head { display: flex; gap: 12px; align-items: center; margin-bottom: 10px; }
+.item-head img { width: 96px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; background: var(--border); flex-shrink: 0; }
+.item-head img:not([src]) { display: none; }
+.item-head strong { display: block; }
+.item-head span { font-size: .85rem; color: var(--muted); }
 .meta { display: flex; gap: 12px; align-items: flex-start; }
 .meta img { width: 120px; aspect-ratio: 16/9; object-fit: cover; border-radius: 8px; background: var(--border); flex-shrink: 0; }
 .meta img:not([src]), .meta img[src=""] { display: none; }

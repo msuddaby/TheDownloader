@@ -11,6 +11,8 @@ public sealed class DownloadJob
     public required string Id { get; init; }
     public required string Url { get; init; }
     public required string OptionId { get; init; }
+    /// <summary>1-based playlist index for multi-video links; null = single video.</summary>
+    public int? Index { get; init; }
     public required string Directory { get; init; }
     public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
     public CancellationTokenSource Cts { get; } = new();
@@ -52,7 +54,7 @@ public sealed class JobManager
 
     public IEnumerable<DownloadJob> All => _jobs.Values;
 
-    public DownloadJob Start(string url, string optionId)
+    public DownloadJob Start(string url, string optionId, int? index)
     {
         var id = Guid.NewGuid().ToString("N");
         var job = new DownloadJob
@@ -60,6 +62,7 @@ public sealed class JobManager
             Id = id,
             Url = url,
             OptionId = optionId,
+            Index = index,
             Directory = Path.Combine(_opt.ResolvedDownloadDirectory, id),
         };
         _jobs[id] = job;
@@ -105,14 +108,15 @@ public sealed class JobManager
             var psi = _ytDlp.NewStartInfo();
             string[] baseArgs =
             [
-                "--no-playlist", "--no-warnings", "--newline", "--progress",
+                "--no-warnings", "--newline", "--progress",
                 "--no-mtime",
                 "--progress-template",
                 $"download:{ProgressMarker}%(progress._percent_str)s|%(progress._speed_str)s|%(progress._eta_str)s",
                 "--print", "after_move:filepath",
                 "-o", Path.Combine(job.Directory, "%(title).120B.%(ext)s"),
             ];
-            foreach (var a in baseArgs.Concat(YtDlp.FormatArgs(job.OptionId))) psi.ArgumentList.Add(a);
+            string[] itemArgs = job.Index is { } i ? ["--playlist-items", i.ToString()] : ["--no-playlist"];
+            foreach (var a in baseArgs.Concat(itemArgs).Concat(YtDlp.FormatArgs(job.OptionId))) psi.ArgumentList.Add(a);
             psi.ArgumentList.Add("--");
             psi.ArgumentList.Add(job.Url);
 

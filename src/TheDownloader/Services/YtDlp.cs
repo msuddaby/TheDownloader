@@ -4,12 +4,20 @@ using Microsoft.Extensions.Options;
 
 namespace TheDownloader.Services;
 
+/// <summary>What a link resolves to. Usually one item; posts with several videos (e.g. a tweet
+/// quoting another video tweet) or playlists yield several.</summary>
 public sealed record VideoInfo(
+    string Title,
+    string? Uploader,
+    string? Site,
+    IReadOnlyList<VideoItem> Items);
+
+/// <param name="Index">1-based playlist index to pass back to /api/download; null for a single video.</param>
+public sealed record VideoItem(
+    int? Index,
     string Title,
     string? Thumbnail,
     double? Duration,
-    string? Uploader,
-    string? Site,
     IReadOnlyList<FormatOption> Options);
 
 /// <param name="Id">Opaque option id sent back to /api/download ("1080", "best", "audio").</param>
@@ -33,15 +41,32 @@ public sealed class YtDlp(IOptions<DownloaderOptions> options, ILogger<YtDlp> lo
         Uri.TryCreate(url?.Trim(), UriKind.Absolute, out uri) &&
         (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
+    /// <summary>Max entries looked up for multi-video links, to keep lookups fast.</summary>
+    public const int MaxItems = 20;
+
+    /// <summary>
+    /// YouTube share links often carry a &amp;list= that would expand into a whole playlist;
+    /// there the video itself is what's wanted. Elsewhere (X/Twitter, Instagram, Reddit, ...)
+    /// a "playlist" is the set of videos in one post, and we want to offer all of them.
+    /// </summary>
+    public static bool PreferSingleVideo(string url) =>
+        Uri.TryCreate(url, UriKind.Absolute, out var u) &&
+        (u.Host.EndsWith("youtube.com", StringComparison.OrdinalIgnoreCase) ||
+         u.Host.EndsWith("youtu.be", StringComparison.OrdinalIgnoreCase)) &&
+        !u.AbsolutePath.StartsWith("/playlist", StringComparison.OrdinalIgnoreCase);
+
     public async Task<VideoInfo> GetInfoAsync(string url, CancellationToken ct)
     {
         var psi = NewStartInfo();
-        foreach (var a in new[] { "-J", "--no-playlist", "--no-warnings", "--", url })
-            psi.ArgumentList.Add(a);
+        var args = new List<string> { "-J", "--no-warnings" };
+        if (PreferSingleVideo(url)) args.Add("--no-playlist");
+        else args.AddRange(["--playlist-items", $"1:{MaxItems}"]);
+        args.AddRange(["--", url]);
+        foreach (var a in args) psi.ArgumentList.Add(a);
 
         using var proc = Process.Start(psi) ?? throw new YtDlpException("Could not start yt-dlp.");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromSeconds(90));
+        timeout.CancelAfter(TimeSpan.FromSeconds(180));
 
         var stdoutTask = proc.StandardOutput.ReadToEndAsync(timeout.Token);
         var stderrTask = proc.StandardError.ReadToEndAsync(timeout.Token);
@@ -67,14 +92,44 @@ public sealed class YtDlp(IOptions<DownloaderOptions> options, ILogger<YtDlp> lo
         return ParseInfo(doc.RootElement);
     }
 
+    private static string? Str(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+
+    private static double? Num(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : null;
+
     private static VideoInfo ParseInfo(JsonElement root)
     {
-        string? Str(JsonElement e, string name) =>
-            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
-        double? Num(JsonElement e, string name) =>
-            e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number ? v.GetDouble() : null;
+        var items = new List<VideoItem>();
+        if (Str(root, "_type") == "playlist" && root.TryGetProperty("entries", out var entries) &&
+            entries.ValueKind == JsonValueKind.Array)
+        {
+            var pos = 0;
+            foreach (var e in entries.EnumerateArray())
+            {
+                pos++;
+                if (e.ValueKind != JsonValueKind.Object) continue; // unavailable entries come back as null
+                var index = (int?)Num(e, "playlist_index") ?? pos;
+                items.Add(ParseItem(e, index));
+            }
+            if (items.Count == 0) throw new YtDlpException("No downloadable videos found at this link.");
+            // A one-video "playlist" is just a video; still pin the index so we download the right thing.
+        }
+        else
+        {
+            items.Add(ParseItem(root, null));
+        }
 
-        var videoFormats = new List<(int Height, string VCodec, long? Size, bool HasAudio)>();
+        return new VideoInfo(
+            Title: Str(root, "title") ?? items[0].Title,
+            Uploader: Str(root, "uploader") ?? Str(root, "channel") ?? Str(root, "uploader_id"),
+            Site: Str(root, "extractor_key") ?? Str(root, "ie_key"),
+            Items: items);
+    }
+
+    private static VideoItem ParseItem(JsonElement root, int? index)
+    {
+        var videoFormats = new List<(int Height, int? Width, string VCodec, long? Size, bool HasAudio)>();
         long? bestAudioSize = null;
         var hasAudio = false;
 
@@ -90,7 +145,7 @@ public sealed class YtDlp(IOptions<DownloaderOptions> options, ILogger<YtDlp> lo
                 var isAudio = acodec != "none" && acodec != "";
 
                 if (isVideo)
-                    videoFormats.Add((height!.Value, vcodec, size, isAudio));
+                    videoFormats.Add((height!.Value, (int?)Num(f, "width"), vcodec, size, isAudio));
                 else if (isAudio)
                 {
                     hasAudio = true;
@@ -103,7 +158,7 @@ public sealed class YtDlp(IOptions<DownloaderOptions> options, ILogger<YtDlp> lo
         else if (Num(root, "height") is { } h && h > 0)
         {
             // Single-format extractors (no "formats" array).
-            videoFormats.Add(((int)h, Str(root, "vcodec") ?? "", (long?)Num(root, "filesize"), true));
+            videoFormats.Add(((int)h, (int?)Num(root, "width"), Str(root, "vcodec") ?? "", (long?)Num(root, "filesize"), true));
             hasAudio = true;
         }
 
@@ -118,7 +173,7 @@ public sealed class YtDlp(IOptions<DownloaderOptions> options, ILogger<YtDlp> lo
 
             options.Add(new FormatOption(
                 Id: group.Key.ToString(),
-                Label: HeightLabel(group.Key),
+                Label: QualityLabel(group.Key, group.Max(f => f.Width)),
                 Height: group.Key,
                 IosCompatible: compatible.Count > 0,
                 Codec: FriendlyCodec(pick[0].VCodec),
@@ -132,12 +187,11 @@ public sealed class YtDlp(IOptions<DownloaderOptions> options, ILogger<YtDlp> lo
         if (hasAudio)
             options.Add(new FormatOption("audio", "Audio only (M4A)", null, false, "AAC", bestAudioSize, true));
 
-        return new VideoInfo(
+        return new VideoItem(
+            Index: index,
             Title: Str(root, "title") ?? "video",
             Thumbnail: Str(root, "thumbnail"),
             Duration: Num(root, "duration"),
-            Uploader: Str(root, "uploader") ?? Str(root, "channel"),
-            Site: Str(root, "extractor_key"),
             Options: options);
     }
 
@@ -199,11 +253,18 @@ public sealed class YtDlp(IOptions<DownloaderOptions> options, ILogger<YtDlp> lo
         var c => c.Split('.')[0].ToUpperInvariant(),
     };
 
-    private static string HeightLabel(int h) => h switch
+    /// <summary>Labels by the short side, so a 1080x1920 portrait clip reads "1080p", not "1920p".</summary>
+    private static string QualityLabel(int height, int? width)
     {
-        >= 4320 => $"{h}p (8K)",
-        >= 2160 => $"{h}p (4K)",
-        >= 1440 => $"{h}p (2K)",
-        _ => $"{h}p",
-    };
+        var portrait = width is > 0 && width < height;
+        var p = portrait ? width!.Value : height;
+        var label = p switch
+        {
+            >= 4320 => $"{p}p (8K)",
+            >= 2160 => $"{p}p (4K)",
+            >= 1440 => $"{p}p (2K)",
+            _ => $"{p}p",
+        };
+        return portrait ? $"{label} · portrait" : label;
+    }
 }

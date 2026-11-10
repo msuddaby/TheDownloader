@@ -4,8 +4,8 @@
   const $ = (id) => document.getElementById(id);
   const els = {
     form: $("url-form"), url: $("url"), paste: $("paste"), go: $("go"),
-    error: $("error"), info: $("info"), thumb: $("thumb"), title: $("title"), byline: $("byline"),
-    options: $("options"), progress: $("progress"), progressLabel: $("progress-label"),
+    error: $("error"), info: $("info"), title: $("title"), byline: $("byline"),
+    items: $("items"), progress: $("progress"), progressLabel: $("progress-label"),
     barFill: $("bar-fill"), progressDetail: $("progress-detail"),
     done: $("done"), doneName: $("done-name"), doneDetail: $("done-detail"),
     share: $("share"), download: $("download"), shareHint: $("share-hint"),
@@ -80,50 +80,79 @@
   }
 
   function renderInfo(info) {
+    const multi = info.items.length > 1;
     els.title.textContent = info.title;
-    els.byline.textContent = [info.uploader, info.site, fmtDuration(info.duration)].filter(Boolean).join(" · ");
-    if (info.thumbnail) els.thumb.src = info.thumbnail; else els.thumb.removeAttribute("src");
+    els.byline.textContent = [info.uploader, info.site,
+      multi ? `${info.items.length} videos` : fmtDuration(info.items[0].duration)].filter(Boolean).join(" · ");
 
-    els.options.replaceChildren(...info.options.map((o) => {
-      const li = document.createElement("li");
-      const btn = document.createElement("button");
-      btn.type = "button";
+    els.items.replaceChildren(...info.items.map((item, i) => {
+      const section = document.createElement("section");
+      section.className = "item";
 
-      const label = document.createElement("span");
-      label.className = "opt-label";
-      label.textContent = o.label;
+      const head = document.createElement("div");
+      head.className = "item-head";
+      const img = document.createElement("img");
+      img.alt = "";
+      img.referrerPolicy = "no-referrer";
+      img.loading = "lazy";
+      if (item.thumbnail) img.src = item.thumbnail;
+      const text = document.createElement("div");
+      const strong = document.createElement("strong");
+      strong.textContent = multi ? `Video ${i + 1} of ${info.items.length}` : "Choose a quality";
+      const sub = document.createElement("span");
+      sub.textContent = [fmtDuration(item.duration),
+        multi && item.title !== info.title ? item.title : ""].filter(Boolean).join(" · ");
+      text.append(strong, sub);
+      head.append(img, text);
 
-      const meta = document.createElement("span");
-      meta.className = "opt-meta";
-      const bits = [];
-      if (o.approxBytes) bits.push(`~${fmtBytes(o.approxBytes)}`);
-      if (o.codec && !o.audioOnly) bits.push(o.codec);
-      if (bits.length) meta.append(bits.join(" · "));
-      if (!o.audioOnly && o.height) {
-        const b = document.createElement("span");
-        b.className = "badge " + (o.iosCompatible ? "ok" : "warn");
-        b.textContent = o.iosCompatible ? "✓ Photos" : "Files only";
-        b.title = o.iosCompatible ? "Can be saved to the camera roll" : "This codec usually can't be saved to Photos";
-        meta.append(b);
-      }
+      const ul = document.createElement("ul");
+      ul.className = "options";
+      ul.append(...item.options.map((o) => renderOption(o, item.index)));
 
-      btn.append(label, meta);
-      btn.addEventListener("click", () => startDownload(o.id));
-      li.append(btn);
-      return li;
+      section.append(head, ul);
+      return section;
     }));
 
     show(els.info);
   }
 
+  function renderOption(o, index) {
+    const li = document.createElement("li");
+    const btn = document.createElement("button");
+    btn.type = "button";
+
+    const label = document.createElement("span");
+    label.className = "opt-label";
+    label.textContent = o.label;
+
+    const meta = document.createElement("span");
+    meta.className = "opt-meta";
+    const bits = [];
+    if (o.approxBytes) bits.push(`~${fmtBytes(o.approxBytes)}`);
+    if (o.codec && !o.audioOnly) bits.push(o.codec);
+    if (bits.length) meta.append(bits.join(" · "));
+    if (!o.audioOnly && o.height) {
+      const b = document.createElement("span");
+      b.className = "badge " + (o.iosCompatible ? "ok" : "warn");
+      b.textContent = o.iosCompatible ? "✓ Photos" : "Files only";
+      b.title = o.iosCompatible ? "Can be saved to the camera roll" : "This codec usually can't be saved to Photos";
+      meta.append(b);
+    }
+
+    btn.append(label, meta);
+    btn.addEventListener("click", () => startDownload(o.id, index));
+    li.append(btn);
+    return li;
+  }
+
   // ---------- step 2: download on the server ----------
-  async function startDownload(option) {
+  async function startDownload(option, index) {
     show(els.progress);
     setProgress("Starting download…", null, "");
     try {
       const job = await api("api/download", {
         method: "POST",
-        body: JSON.stringify({ url: currentUrl, option }),
+        body: JSON.stringify({ url: currentUrl, option, index }),
       });
       poll(job.id);
     } catch (e) {

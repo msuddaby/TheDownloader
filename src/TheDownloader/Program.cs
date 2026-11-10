@@ -51,7 +51,10 @@ api.MapPost("/download", (DownloadRequest req, JobManager jobs) =>
     if (option is not ("best" or "audio") && !(int.TryParse(option, out var h) && h is > 0 and < 10000))
         return Results.BadRequest(new { error = "Unknown format option." });
 
-    var job = jobs.Start(uri!.ToString(), option);
+    if (req.Index is < 1 or > YtDlp.MaxItems)
+        return Results.BadRequest(new { error = "Unknown video in this post." });
+
+    var job = jobs.Start(uri!.ToString(), option, req.Index);
     return Results.Ok(ToDto(job, jobs));
 });
 
@@ -109,4 +112,4 @@ static object ToDto(DownloadJob job, JobManager jobs)
 }
 
 record UrlRequest(string? Url);
-record DownloadRequest(string? Url, string? Option);
+record DownloadRequest(string? Url, string? Option, int? Index);
