@@ -2,6 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <script>
+    // All asset/API URLs are relative, so the app works under any base path (e.g. /thedownloader/)
+    // as long as the page URL ends in "/". Fix it up before anything relative gets resolved.
+    (function () {
+      var p = location.pathname, last = p.slice(p.lastIndexOf("/") + 1);
+      if (last && last.indexOf(".") === -1) location.replace(p + "/" + location.search + location.hash);
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Downloader">

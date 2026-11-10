@@ -93,7 +93,7 @@ static object ToDto(DownloadJob job, JobManager jobs)
         eta = job.Eta,
         fileName = job.FileName,
         fileSize = job.FileSize,
-        fileUrl = job.Status == JobStatus.Done ? $"/api/jobs/{job.Id}/file" : null,
+        fileUrl = job.Status == JobStatus.Done ? $"api/jobs/{job.Id}/file" : null,
         mimeType = ext switch
         {
             ".mp4" => "video/mp4",

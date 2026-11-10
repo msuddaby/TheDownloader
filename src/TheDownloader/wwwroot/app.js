@@ -69,7 +69,7 @@
     reset(false);
     setBusy(true);
     try {
-      const info = await api("/api/info", { method: "POST", body: JSON.stringify({ url }) });
+      const info = await api("api/info", { method: "POST", body: JSON.stringify({ url }) });
       renderInfo(info);
     } catch (e) {
       show();
@@ -121,7 +121,7 @@
     show(els.progress);
     setProgress("Starting download…", null, "");
     try {
-      const job = await api("/api/download", {
+      const job = await api("api/download", {
         method: "POST",
         body: JSON.stringify({ url: currentUrl, option }),
       });
@@ -149,7 +149,7 @@
     const tick = async () => {
       let job;
       try {
-        job = await api(`/api/jobs/${id}`);
+        job = await api(`api/jobs/${id}`);
       } catch (e) {
         show();
         showError(e.message);
