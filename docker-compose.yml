@@ -1,0 +1,15 @@
+services:
+  downloader:
+    build: .
+    image: thedownloader
+    container_name: thedownloader
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      Downloader__RetentionMinutes: "10"
+      Downloader__MaxConcurrentDownloads: "2"
+      YTDLP_AUTO_UPDATE: "true"
+    # Optional: keep temp files in RAM instead of the container's disk.
+    # tmpfs:
+    #   - /downloads:uid=1654,gid=1654,size=4g

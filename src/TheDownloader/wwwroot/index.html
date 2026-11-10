@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Downloader">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#0f1115" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#f5f6f8" media="(prefers-color-scheme: light)">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <title>The Downloader</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main>
+    <header>
+      <h1>The Downloader</h1>
+      <p class="sub">Paste a link, pick a quality, save it.</p>
+    </header>
+
+    <form id="url-form" class="card" autocomplete="off">
+      <label for="url" class="sr-only">Video link</label>
+      <div class="input-row">
+        <input id="url" name="url" type="url" inputmode="url" placeholder="https://…" required
+               autocapitalize="off" autocorrect="off" spellcheck="false">
+        <button type="button" id="paste" class="ghost" title="Paste from clipboard">Paste</button>
+      </div>
+      <button type="submit" id="go" class="primary">Get options</button>
+    </form>
+
+    <section id="error" class="card error" hidden></section>
+
+    <section id="info" class="card" hidden>
+      <div class="meta">
+        <img id="thumb" alt="" referrerpolicy="no-referrer">
+        <div>
+          <h2 id="title"></h2>
+          <p id="byline" class="muted"></p>
+        </div>
+      </div>
+      <h3>Choose a quality</h3>
+      <ul id="options" class="options"></ul>
+      <p class="muted small">✓ Photos = H.264/HEVC MP4, which iPhone can save straight to the camera roll.</p>
+    </section>
+
+    <section id="progress" class="card" hidden>
+      <p id="progress-label">Starting…</p>
+      <div class="bar"><div id="bar-fill"></div></div>
+      <p id="progress-detail" class="muted small"></p>
+    </section>
+
+    <section id="done" class="card" hidden>
+      <p class="done-name" id="done-name"></p>
+      <p id="done-detail" class="muted small"></p>
+      <button id="share" class="primary" hidden>Save to Photos</button>
+      <a id="download" class="button secondary" href="#">Download file</a>
+      <p id="share-hint" class="muted small" hidden></p>
+      <p id="expires" class="muted small"></p>
+      <button id="again" class="ghost wide">Download something else</button>
+    </section>
+
+    <footer class="muted small">Files are deleted from the server after <span id="retention">10</span> minutes.</footer>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>
