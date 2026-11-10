@@ -30,6 +30,7 @@ button. That button opens the iOS share sheet, where you tap **Save Video**.
 | `Downloader__RetentionMinutes` | `10` | How long finished files are kept |
 | `Downloader__MaxConcurrentDownloads` | `2` | Parallel yt-dlp downloads |
 | `Downloader__DownloadTimeoutMinutes` | `30` | A single download is stopped after this |
+| `Downloader__StampCreationDate` | `true` | Set the file's creation date to the download time, so it lands at the front of the iOS camera roll |
 | `YTDLP_AUTO_UPDATE` | `true` | Run `yt-dlp -U` when the container starts |
 
 The app has no authentication. Don't expose it to the open internet unless something in front of it

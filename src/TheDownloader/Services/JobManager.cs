@@ -160,6 +160,12 @@ public sealed class JobManager
             if (finalPath is null || !Path.GetFullPath(finalPath).StartsWith(Path.GetFullPath(job.Directory)))
                 throw new YtDlpException("Download finished but no file was produced.");
 
+            if (_opt.StampCreationDate)
+            {
+                job.Status = JobStatus.Processing;
+                await StampCreationDateAsync(finalPath, ct);
+            }
+
             job.FilePath = finalPath;
             job.FileName = Path.GetFileName(finalPath);
             job.FileSize = new FileInfo(finalPath).Length;
@@ -181,6 +187,71 @@ public sealed class JobManager
         finally
         {
             _slots.Release();
+        }
+    }
+
+    /// <summary>
+    /// Rewrites the container (stream copy, no re-encode) with creation_time = now. iOS Photos
+    /// sorts by this; without it, downloads land wherever the original upload date puts them.
+    /// Failure is non-fatal - the file is still usable, just undated.
+    /// </summary>
+    private async Task StampCreationDateAsync(string path, CancellationToken ct)
+    {
+        var ext = Path.GetExtension(path).ToLowerInvariant();
+        if (ext is not (".mp4" or ".m4a" or ".mov")) return;
+
+        var tmp = Path.Combine(Path.GetDirectoryName(path)!, ".stamped" + ext);
+        var now = DateTimeOffset.UtcNow;
+        var psi = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = _opt.FfmpegPath,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        string[] args =
+        [
+            "-hide_banner", "-loglevel", "error", "-y",
+            "-i", path,
+            "-map", "0:v?", "-map", "0:a?", "-c", "copy",
+            "-map_metadata", "0",
+            "-metadata", $"creation_time={now:yyyy-MM-ddTHH:mm:ss.ffffffZ}",
+            // Apple's own key; Photos prefers it when present. Needs use_metadata_tags to be written.
+            "-metadata", $"com.apple.quicktime.creationdate={now.ToLocalTime():yyyy-MM-ddTHH:mm:sszzz}",
+            "-movflags", "+faststart+use_metadata_tags",
+            tmp,
+        ];
+        foreach (var a in args) psi.ArgumentList.Add(a);
+
+        try
+        {
+            using var proc = System.Diagnostics.Process.Start(psi)
+                ?? throw new InvalidOperationException("Could not start ffmpeg.");
+            var stderrTask = proc.StandardError.ReadToEndAsync(CancellationToken.None);
+            _ = proc.StandardOutput.ReadToEndAsync(CancellationToken.None);
+            using var reg = ct.Register(() => YtDlp.TryKill(proc));
+            await proc.WaitForExitAsync(CancellationToken.None);
+            var stderr = await stderrTask;
+            ct.ThrowIfCancellationRequested();
+
+            if (proc.ExitCode != 0 || !File.Exists(tmp) || new FileInfo(tmp).Length == 0)
+            {
+                _logger.LogWarning("ffmpeg date stamp failed for {File}: {Err}", path, stderr);
+                return;
+            }
+            File.Move(tmp, path, overwrite: true);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Could not stamp creation date on {File}", path);
+        }
+        finally
+        {
+            try { File.Delete(tmp); } catch { /* moved or never created */ }
         }
     }
 
