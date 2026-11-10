@@ -6,6 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<DownloaderOptions>(builder.Configuration.GetSection("Downloader"));
 builder.Services.AddSingleton<YtDlp>();
+builder.Services.AddSingleton<MediaFinalizer>();
 builder.Services.AddSingleton<JobManager>();
 builder.Services.AddHostedService<CleanupService>();
 builder.Services.Configure<ForwardedHeadersOptions>(o =>
@@ -20,7 +21,12 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 app.UseDefaultFiles();
-app.UseStaticFiles();
+app.UseStaticFiles(new StaticFileOptions
+{
+    // Always revalidate (cheap 304 via ETag) so browsers - Safari especially - never run a stale
+    // app.js against a newer API after an update.
+    OnPrepareResponse = ctx => ctx.Context.Response.Headers.CacheControl = "no-cache",
+});
 
 var contentTypes = new FileExtensionContentTypeProvider();
 contentTypes.Mappings[".m4a"] = "audio/mp4";

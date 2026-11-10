@@ -134,8 +134,8 @@
     if (!o.audioOnly && o.height) {
       const b = document.createElement("span");
       b.className = "badge " + (o.iosCompatible ? "ok" : "warn");
-      b.textContent = o.iosCompatible ? "✓ Photos" : "Files only";
-      b.title = o.iosCompatible ? "Can be saved to the camera roll" : "This codec usually can't be saved to Photos";
+      b.textContent = o.iosCompatible ? "✓ Photos" : "Converts";
+      b.title = o.iosCompatible ? "Already H.264/HEVC - ready for Photos" : "Will be re-encoded to H.264 for Photos (takes longer)";
       meta.append(b);
     }
 
@@ -195,7 +195,11 @@
           break;
         }
         case "processing":
-          setProgress("Processing…", null, "Merging audio and video");
+          setProgress("Processing…", null, "Preparing MP4");
+          break;
+        case "converting":
+          setProgress(`Converting to MP4… ${job.progress.toFixed(0)}%`, job.progress,
+            "Re-encoding to H.264 so Photos accepts it");
           break;
         case "done":
           return onDone(job);

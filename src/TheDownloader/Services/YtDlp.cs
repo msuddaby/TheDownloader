@@ -21,7 +21,7 @@ public sealed record VideoItem(
     IReadOnlyList<FormatOption> Options);
 
 /// <param name="Id">Opaque option id sent back to /api/download ("1080", "best", "audio").</param>
-/// <param name="IosCompatible">True when the result will be H.264/HEVC + AAC in MP4, which the iOS Photos app accepts.</param>
+/// <param name="IosCompatible">True when an H.264/HEVC source exists, so no re-encode is needed (everything ends up as an iOS-friendly MP4 either way).</param>
 public sealed record FormatOption(
     string Id,
     string Label,
@@ -207,10 +207,10 @@ public sealed class YtDlp(IOptions<DownloaderOptions> options, ILogger<YtDlp> lo
                 "-f", $"bv*[height<={h}]+ba/b[height<={h}]/b",
                 // Prefer the highest resolution under the cap, then iPhone-friendly codecs.
                 "-S", "res,vcodec:h264,acodec:aac",
-                "--merge-output-format", "mp4",
+                "--merge-output-format", "mp4/mkv",
             ];
 
-        return ["-f", "bv*+ba/b", "-S", "vcodec:h264,acodec:aac", "--merge-output-format", "mp4"];
+        return ["-f", "bv*+ba/b", "-S", "vcodec:h264,acodec:aac", "--merge-output-format", "mp4/mkv"];
     }
 
     public ProcessStartInfo NewStartInfo() => new()

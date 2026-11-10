@@ -8,6 +8,8 @@ public sealed class DownloaderOptions
     /// <summary>Path or name of the ffmpeg executable (used to stamp the creation date).</summary>
     public string FfmpegPath { get; set; } = "ffmpeg";
 
+    public string FfprobePath { get; set; } = "ffprobe";
+
     /// <summary>
     /// Set the file's creation date to the download time, so iOS Photos files it at the
     /// front of the camera roll instead of by original upload date (or import order).
